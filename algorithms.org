@@ -1,0 +1,418 @@
+* Интро
+Освоение алгоритмов и построения деревьев.
+
+* Реализация бинарного дерева
+Реализация алгорима по построению бинарного дерева.
+
+** На лиспе
+
+#+BEGIN_SRC lisp
+  ;; структура ноды
+  (defstruct (node)
+    elt (l nil) (r nil))
+
+  ;; вставка в дерево
+  (defun insert-bst (tree obj)
+    (if (null tree)
+        (make-node :elt obj)
+        (let ((elt (node-elt tree)))
+          (cond (( > obj elt)
+                 (if (null (node-r tree))
+                     (setf (node-r tree) (make-node :elt obj))
+                     (insert-bst (node-r tree) obj)))
+                (( < obj elt)
+                 (if (null (node-l tree))
+                     (setf (node-l tree) (make-node :elt obj))
+                     (insert-bst (node-l tree) obj)))
+                (t tree)))))
+
+  ;; создание дерева
+  (defun make-bst (lst)
+    (defun make-bst-rec (bst-tree lst)
+      (if (null lst)
+          bst-tree
+          (progn
+            (insert-bst bst-tree (car lst))
+            (make-bst-rec bst-tree (cdr lst)))))
+    (make-bst-rec (insert-bst nil (car lst)) (cdr lst)))
+
+  ;; тесты
+  (make-bst '(1 2 3 4 5 6))
+  (make-bst '(4 7 20 5 3 8 2 9 2))
+
+#+END_SRC
+
+** На си
+
+#+NAME: bst_c
+#+BEGIN_SRC c :tangle bst.c
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  struct node {
+      int elt;
+      struct node * left;
+      struct node * right;
+  };
+
+
+  int print_space ( int space ) {
+      for( int i = 0; i < space; i++ ) {
+          printf(" ");
+      }
+  }
+
+  int print_string_with_spaces (char string[], int space ) {
+      print_space ( space );
+      printf("%s", string );
+  }
+
+  int print_bst_tree_rec ( struct node * tree, int space  ) {
+
+      if ( NULL == tree ) {
+          printf(" nil \n");
+          return 0;
+      }
+
+      print_space ( 2 );
+      printf("*NODE*: %d \n", tree->elt);
+
+      print_string_with_spaces( "r:", space);
+      print_bst_tree_rec ( tree->right, space + 5);
+
+      print_string_with_spaces( "l:", space);
+      print_bst_tree_rec ( tree->left, space + 5);
+  }
+
+  int print_bst_tree ( struct node * tree ) {
+      print_bst_tree_rec ( tree, 2 );
+  }
+
+  struct node* insert_bst ( struct node * tree, int obj ) {
+
+      if ( NULL == tree ) {
+          struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+          new_node->elt = obj;
+          return new_node;
+
+      } else if ( obj > tree->elt) {
+
+          if ( tree->right == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->right = new_node;
+              return tree;
+          }
+          insert_bst ( tree->right, obj );
+
+      } else if ( obj < tree->elt) {
+
+          if ( tree->left == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->left = new_node;
+              return tree;
+          }
+          insert_bst ( tree->left, obj );
+      } else {
+          return tree;
+      }
+  }
+
+  struct node* make_bst ( int numbers[], int len ) {
+      struct node* tree = insert_bst( NULL, numbers[0] );
+
+      for (int i = 1; i < len; i++ ) {
+          insert_bst( tree,  numbers[i]);
+      }
+      return tree;
+  }
+
+  int main () {
+      int numbers[10] = {5, 9, 0, 1, 6, 10, 5, 3, 2, 8};
+      struct node* tree = make_bst( numbers, 10 );
+      print_bst_tree ( tree );
+  }
+
+#+END_SRC
+
+** На го
+#+NAME: bst_go
+#+BEGIN_SRC go :tangle bst_go.go
+  package main
+
+  import ( "fmt" )
+
+  type node struct {
+      elt int
+      left *node
+      right *node
+  }
+
+  func printSpace( space int ) {
+      fmt.Printf(" ")
+  }
+
+  func printStringWithSpace( space int, msg string ) {
+      printSpace( space )
+      fmt.Printf("%s", msg)
+  }
+
+  func printTree ( tree *node) {
+      printTreeRec ( tree, 2)
+  }
+
+  func printTreeRec ( tree *node, space int ) {
+      if tree == nil {
+          fmt.Printf("nil \n")
+
+      } else {
+          printSpace(2)
+          fmt.Printf("*NODE*: %d \n", tree.elt)
+
+          printStringWithSpace( space, "r: ")
+          printTreeRec ( tree.right, space + 5 )
+
+          printStringWithSpace( space, "l: ")
+          printTreeRec ( tree.left, space + 5 )
+      }
+  }
+
+
+  func insertBst( tree *node, obj int ) *node {
+      if tree == nil {
+          newTree := node{ elt: obj }
+          return &newTree
+
+      } else if ( obj > tree.elt ) {
+
+          if ( tree.right == nil ) {
+              newNode := node{ elt: obj }
+              tree.right = &newNode
+              return tree
+          } else {
+              insertBst( tree.right, obj )
+          }
+      } else if ( obj < tree.elt ) {
+
+          if ( tree.left == nil ) {
+              newNode := node{ elt: obj }
+              tree.left = &newNode
+              return tree
+          } else {
+              insertBst( tree.left, obj )
+          }
+      }
+      return tree
+  }
+
+  func main () {
+      // tree := node{}
+      printTree( insertBst( nil, 1 ) )
+  }
+
+#+END_SRC
+
+* Поиск в глубину
+** Описание алгоритма
+
+Это алгоритм позволяет в любом связном простом графе найти его дерево.
+- берем первую вершину
+- находим первую смежную с ней, которая еще не включена в наше искомое
+  дерево
+- занимаем ее, ищем ближайшую вершину, смежную с ней и т.д.
+
+Так до тех пор, пока не останется смежных вершин у какой-то вершины на
+текущем шаге рекурсии. Тогда возвращаемся на предыдущий шаг рекурсии, и
+ищем еще одну незанятую вершину и обходим это поддерево - при этом
+вершины, которые мы обошли (и зашли в тупик) никуда из искомого дерева не
+деваются. Наша цель - просто обойти весь граф таким образом, чтоб
+избавиться от циклов - т.е. ни одна смежная вершина не должна быть уже
+частью дерева, тогда мы можем включить ее в дерево.
+
+Алгоритм заканчивает работу, когда все необойденные вершины кончаются.
+
+** Реализация агоритма на циклическом графе
+
+Сначала просто реализуем поиск в глубину на каком-то графе.
+Сделаем это на 3х языках: с++, go и лисп. Начнем с лиспа, как с наиболее
+известного языка.
+
+Самое главное, нужно знать, не образует ли дерево, полученное в
+результате поиска, цикл.
+
+Сделать это просто: если две вершины нового ребра уже связаны друг с
+другом каким-то путем в графе, то добавление этого ребра создаст цикл.
+
+Предположим, есть список ребер (0 1) (1 3) (3 4) (4 2).  Мы хотим
+добавить ребро (4 1). Чтоб определить, создаст ли это ребро цикл, нужно
+определить, являются ли вершины 4 и 1 связными уже - т.е. есть ли между
+ними какой-то путь.
+
+Берем вершину 4. В списке ребер ищем все инцидентные ей ребра - они
+должны выключать эту вершину. Если таковые есть, вытаскиваем вершины из
+них и ищем инцидентные им ребра и т.д до тех пор, пока не найдем ребро,
+инцидентное 1 или список не кончится.
+
+#+BEGIN_SRC lisp
+  ;; ищет все ребра, инцидентные заданной вершине
+  (defun find-incident-edges (top list-of-edges)
+    (if ( null list-of-edges)
+        '()
+        (if (member top (car list-of-edges))
+            (cons  (car list-of-edges)
+                   (find-incident-edges top (cdr list-of-edges)))
+            (find-incident-edges top (cdr list-of-edges)))))
+
+  ;; (find-incident-edges 4 '((1 2) (3 4) (4 5) (5 6) (1 4)))
+
+  ;; возвращает вершину в ребре, отличную от заданной, при условии, что эта вершина
+  ;; не числится как "исследованная"
+  (defun get-second-top (top edge list-of-researched-tops)
+    (if ( = top (car edge))
+        (if (member (cadr edge) list-of-researched-tops)
+            nil
+            (cadr edge))
+        (if (member (car edge) list-of-researched-tops)
+            nil
+            (car edge))))
+
+  ;; ищет первую неисследованную вершину, среди концевых ребер вершины, инцидентных
+  ;; заданной
+  (defun get-unserched-top (top list-of-researched-tops list-of-incident-edges)
+    (if (null list-of-incident-edges)
+        nil
+        (let ((unserched-top (get-second-top top (car list-of-incident-edges)
+                                             list-of-researched-tops)))
+          (if (null unserched-top)
+              (get-unserched-top top list-of-researched-tops
+                                 (cdr list-of-incident-edges))
+              unserched-top))))
+
+  ;; определяет, есть ли какой-то путь между двумя заданными вершинами
+  ;; принимает 2 вершины и список ребер, возвращает булево значение
+  (defun have-path? (top-begin top-end list-of-edges)
+    (have-path-rec top-begin top-end list-of-edges '()))
+
+  (defun have-path-rec (top-begin top-end list-of-edges list-of-researched-tops)
+    (if (null list-of-edges)
+        nil
+        (let ((list-of-incident-edges
+               (find-incident-edges top-begin list-of-edges)))
+          (if (find-incident-edges top-end list-of-incident-edges)
+              t
+              (do ((i (length list-of-incident-edges) (decf i)))
+                  ((= i 0) nil)
+                (let ((new-top (get-unserched-top
+                                top-begin list-of-researched-tops
+                                list-of-incident-edges)))
+                  (if (null new-top)
+                      nil
+                      (if (have-path-rec new-top top-end list-of-edges
+                                      (cons top-begin
+                                            list-of-researched-tops))
+                          (return-from have-path-rec t)
+                          (setf list-of-incident-edges
+                                (cdr list-of-incident-edges))))))))))
+
+
+
+  (have-path? 4 3 '((1 2) (3 4) (4 5) (5 6) (1 4)))
+  (have-path? 4 6 '((1 2) (3 4) (4 5) (5 6) (1 4)))
+  (have-path? 6 3 '((1 2) (3 4) (4 5) (5 6) (1 4)))
+  (have-path? 0 3 '((1 2) (3 4) (4 5) (5 6) (1 4)))
+  (have-path? 4 7 '((1 2) (3 4) (4 5) (5 6) (1 4) (2 7)))
+  (have-path? 1 8 '((1 2) (3 4) (4 5) (5 6) (1 4) (2 7) (9 8)))
+#+END_SRC
+
+Мы предполагаем, что граф будет задаваться как список ребер, где каждый
+подсписок - это 2 концевые вершины ребра.
+Пройденные ребра надо запоминать - это и будет дерево, образованное от
+поиска в глубину. Прежде чем добавить новое ребро, проверяем, не создаст
+ли это цикл. Если да, то не добавляем ребро в список ребер.
+
+Мы предполагаем, что граф размеченный - т.е. у вершин есть некоторый
+порядок. Предположим, есть вершина 2 и ей инцидентны вершины 4
+и 7. Сначала пойдем по ребру, соединяющему 2 и 4, и только когда обойдем
+это поддерево, то пойдем по ребру (2 7), если в этом будет
+необходимость.
+
+На каждом шаге рекурсии:
+- берем вершину
+- ищем все инцидентные ей
+- выбираем ту, что соединяет текущую вершину и наиболее близкую к ней по
+  порядку
+- заносим ребро, соединяющее их, в список сохраненных ребер
+- идем к новой вершине и проверяем все вершины, инцидентные ей и т.д.
+- повторяем до тех пор, пока не уперлись в тупик - нет инцидентных вершин
+  или они уже все обойдены.
+
+#+BEGIN_SRC lisp
+  (defun get-other-top (top edge)
+    (if (= top (car edge))
+        (cadr edge)
+        (car edge)))
+
+  ;; ищет "ближайшее" по порядку вершин ребро
+  (defun find-nearest-edge (top edge list-of-incident-edges)
+    (if (null list-of-incident-edges)
+        edge
+        (if (> (get-other-top top edge)
+               (get-other-top top (car list-of-incident-edges)))
+            (find-nearest-edge top (car list-of-incident-edges)
+                               (cdr list-of-incident-edges))
+            (find-nearest-edge top edge
+                               (cdr list-of-incident-edges)))))
+
+
+  ;; ищет следующее доступное для прохода ребро
+  (defun find-next-edge (top list-of-incident-edges path-in-depth)
+    (if (null list-of-incident-edges)
+        nil
+        (let ((nearest-edge (find-nearest-edge top
+                                               (car list-of-incident-edges)
+                                               (cdr list-of-incident-edges))))
+          (if (have-path? (car nearest-edge) (cadr nearest-edge) path-in-depth)
+              (find-next-edge top
+                              (remove nearest-edge list-of-incident-edges :test #'equal)
+                              path-in-depth)
+              nearest-edge))))
+
+
+  ;; (find-next-edge 4 '((3 4) (1 4) (4 5)) '())
+  ;; (find-next-edge 4 '((3 4) (1 4) (4 5)) '((4 3) (3 1)))
+  ;; (find-next-edge 4 '((3 4) (1 4)) '((4 3) (3 1)))
+
+  (defun search-in-depth-rec (top list-of-edges path-in-depth)
+    (if (null list-of-edges)
+        path-in-depth
+        (let ((list-of-incident-edges
+               (find-incident-edges top list-of-edges)))
+          (do ((i (length list-of-incident-edges) (decf i)))
+              ((= i 0) path-in-depth)
+            (let ((edge (find-next-edge top list-of-incident-edges path-in-depth)))
+              (if (null edge)
+                  (return path-in-depth)
+                  (progn
+                    (setf list-of-incident-edges
+                          (remove edge list-of-incident-edges :test #'equal)
+                          path-in-depth (cons edge path-in-depth)
+                          list-of-edges (remove edge list-of-edges :test #'equal))
+                    (let ((new-path (search-in-depth-rec (get-other-top top edge)
+                                                         list-of-edges path-in-depth)))
+                      (setf path-in-depth new-path)))))))))
+
+  (defparameter *test-graph* '((0 3) (3 1) (1 10) (10 0) (1 2) (2 8) (8 12)
+                               (12 5) (6 11) (5 11) (4 6) (7 9) (4 7) (4 8)))
+
+  (defparameter *test-graph2* '((1 2) (1 4) (2 7) (2 4) (4 3) (4 5) (5 6)))
+
+  (search-in-depth-rec 1 *test-graph2* '())
+  (search-in-depth-rec 0 *test-graph* '())
+#+END_SRC
+
+** Поиск в глубина на бинарном дереве
+
+#+BEGIN_SRC lisp
+
+#+END_SRC
