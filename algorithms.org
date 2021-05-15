@@ -427,9 +427,6 @@
 
 ** Поиск в глубину на бинарном дереве
 
-#+BEGIN_SRC lisp
-
-#+END_SRC
 *** На лиспе
 
 Сначала строим бинарное дерево, используя уже известные процедуры:
@@ -629,6 +626,349 @@
       tree := makeBst( numbers )
       path := dfs(tree, 13)
 
+      for i := range path {
+          fmt.Printf("%d ", path[i])
+      }
+      fmt.Printf("\n")
+  }
+#+END_SRC
+* Поиск в ширину
+
+Это алгоритм, который из любого графа позволяет построить такое его
+остовное дерево, в котором расстояние от корня до любой вершины такое
+же, как в исходном графе. Это его отличие от поиска в глубину.
+
+Обход в ширину означает, что мы движемся от корня до листьев графа, но
+сначала обходим все узлы на текущем "уровне" дерева, потом спускаемся на
+один уровень ниже и обходим все там, и т.д, пока не дойдем до листьев.
+
+** Обход бинарного берева
+
+*** На лиспе
+
+Создаем бинарное дерево.
+#+BEGIN_SRC lisp
+  (setf test-tree (make-bst '(4 7 20 5 3 8 2 9 1 0 32 14 6)))
+#+END_SRC
+
+Процедура принимает на вход дерева, а возвращает список вершин в том
+порядке, в котором она его обошла - т.е. как обойти вершины поиском в
+ширину.
+#+NAME bfs
+#+BEGIN_SRC lisp :tangle lisp_alg.lisp
+  ;; создает очередь
+  (defun make-queue () (cons nil nil))
+
+  ;; добавляет объект в очередь
+  (defun enqueue (obj q)
+    (if (null (car q))
+        (setf (cdr q) (setf (car q) (list obj)))
+        (setf (cdr (cdr q)) (list obj)
+              (cdr q) (cdr (cdr q))))
+    (car q))
+
+  ;; берет объект из очереди
+  (defun dequeue (q)
+    (pop (car q)))
+
+  ;; проверяет, пустая ли очередь
+  (defun null-queue (queue)
+    (and (null (car queue))
+         (null (cdr queue))))
+
+  ;; осуществляет посик в ширину
+  (defun bfs (tree lst queue)
+    (if (null tree)
+        lst
+        (progn
+          (setf lst (append lst (list (node-elt tree))))
+          (cond ((and (node-r tree) (node-l tree))
+                 (progn
+                   (enqueue (node-l tree) queue)
+                   (enqueue (node-r tree) queue)
+                   (bfs (dequeue queue) lst queue)))
+                ((node-r tree)
+                 (progn
+                   (enqueue (node-r tree) queue)
+                   (bfs (dequeue queue) lst queue)))
+                ((node-l tree)
+                 (progn
+                   (enqueue (node-l tree) queue)
+                   (bfs (dequeue queue) lst queue)))
+                ((null-queue queue)
+                 lst)
+                (t (bfs (dequeue queue) lst queue))))))
+
+  (bfs test-tree '() (make-queue))
+
+#+END_SRC
+
+*** На си
+
+На ми можно реализовать очередь с помощью односвязного списка с двумя
+указателями: один указывает на первый элемент, второй - на следующую
+свободную ячейку в очереди.
+Очередь пуста, если оба указателя указывают на одну и ту же ячейку.
+
+Добавление элемента в очередь:
+- записать элемент в свободную ячейку, на которую указывает второй указатель
+- создать новую пустую ячейку
+- сдвинуть хвостовой указатель, чтоб указывал на нее
+
+Взятие элемента из очереди:
+- считать элемент по головному указателю очереди
+- сдвинуть головной указатель на следующую ячейку
+
+
+#+NAME: queue_bfs
+#+BEGIN_SRC c :noweb yes
+  struct queue_elt {
+      struct node * elt;
+      struct queue_elt * next_elt;
+  };
+
+  struct queue_elt * begin_queue;
+  struct queue_elt * end_queue;
+
+
+  void init_queue() {
+      begin_queue = (struct queue_elt*)malloc( sizeof( struct queue_elt ) );
+      end_queue = begin_queue;
+  }
+
+  int empty_queue_predicat() {
+      if ( begin_queue == end_queue ) {
+          return 1;
+      }
+      return 0;
+  }
+
+  struct queue_elt * pop_elt() {
+      struct queue_elt * elt = begin_queue;
+      begin_queue = begin_queue->next_elt;
+      return elt;
+  }
+
+  void push_elt( struct node * elt ) {
+      end_queue->elt = elt;
+      struct queue_elt* empty_queue_elt = (struct queue_elt*)malloc( sizeof( struct queue_elt ) );
+      end_queue->next_elt = empty_queue_elt;
+      end_queue = empty_queue_elt;
+  }
+#+END_SRC
+
+
+#+NAME bfs_c
+#+BEGIN_SRC c :noweb yes :tangle bfs.c
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  struct node {
+      int elt;
+      struct node * left;
+      struct node * right;
+  };
+
+  <<queue_bfs>>
+
+  struct node* insert_bst ( struct node * tree, int obj ) {
+
+      if ( NULL == tree ) {
+          struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+          new_node->elt = obj;
+          return new_node;
+
+      } else if ( obj > tree->elt) {
+
+          if ( tree->right == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->right = new_node;
+              return tree;
+          }
+          insert_bst ( tree->right, obj );
+
+      } else if ( obj < tree->elt) {
+
+          if ( tree->left == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->left = new_node;
+              return tree;
+          }
+          insert_bst ( tree->left, obj );
+      } else {
+          return tree;
+      }
+  }
+
+  struct node* make_bst ( int numbers[], int len ) {
+      struct node* tree = insert_bst( NULL, numbers[0] );
+
+      for (int i = 1; i < len; i++ ) {
+          insert_bst( tree,  numbers[i]);
+      }
+      return tree;
+  }
+
+  int*  bfs( struct node* tree, int len ) {
+      int *path  =  (int*)malloc( (sizeof( int ) ) * len);
+      int *path_begin = path;
+
+      int bfs_rec ( struct node* tree ) {
+
+          if( NULL == tree ) {
+              return 0;
+          }
+          ,*path = tree->elt;
+          path++;
+          if ( NULL != tree->left && NULL != tree->right ) {
+              push_elt(tree->left);
+              push_elt(tree->right);
+              struct queue_elt* next_node = pop_elt();
+              bfs_rec ( next_node->elt );
+
+          } else if ( NULL != tree->left ) {
+              push_elt(tree->left);
+              struct queue_elt* next_node = pop_elt();
+              bfs_rec ( next_node->elt );
+
+          } else if ( NULL != tree->right ) {
+              push_elt(tree->right);
+              struct queue_elt* next_node = pop_elt();
+              bfs_rec ( next_node->elt );
+
+          } else if ( empty_queue_predicat () == 1 ) {
+              return 0;
+
+          } else {
+              struct queue_elt* next_node = pop_elt();
+              bfs_rec ( next_node->elt );
+          }
+      }
+
+      init_queue();
+      bfs_rec ( tree );
+      return path_begin;
+  }
+
+  int main () {
+      int len = 10;
+      int numbers[10] = {5, 9, 0, 1, 6, 10, 7, 3, 2, 8};
+      struct node* tree = make_bst( numbers, len );
+      int * elts = bfs( tree, len );
+
+      for ( int i = 0; i < len; i++ ) {
+          printf("%d ", *elts);
+          elts++;
+      }
+      printf("\n");
+  }
+#+END_SRC
+
+*** На го
+
+Аналогичным образом реализуем поиск в ширину на go. Только это будет еще
+проще, поскольку в го есть каналы, которые можно использовать вместо
+очередей. Только используем неблокирующую запись/чтение.
+
+#+NAME: bfs_go
+#+BEGIN_SRC go :noweb yes :tangle bfs_go.go
+  package main
+
+  import ("fmt")
+
+  type node struct {
+      elt int
+      left *node
+      right *node
+  }
+
+  func insertBst( tree *node, obj int ) *node {
+      if tree == nil {
+          newTree := node{ elt: obj }
+          return &newTree
+
+      } else if ( obj > tree.elt ) {
+
+          if ( tree.right == nil ) {
+              newNode := node{ elt: obj }
+              tree.right = &newNode
+              return tree
+          } else {
+              insertBst( tree.right, obj )
+          }
+      } else if ( obj < tree.elt ) {
+
+          if ( tree.left == nil ) {
+              newNode := node{ elt: obj }
+              tree.left = &newNode
+              return tree
+          } else {
+              insertBst( tree.left, obj )
+          }
+      }
+      return tree
+  }
+
+  func makeBst ( numbers [13]int ) *node {
+      tree := insertBst( nil, numbers[0] )
+
+      for i := range numbers {
+          insertBst( tree, numbers[i] )
+      }
+      return tree
+  }
+
+  func bfs_rec ( tree *node, ch chan *node, path []int, indx int ) int {
+      if tree == nil {
+          return indx;
+
+      } else {
+          path[indx] = tree.elt
+          indx++
+
+          if tree.right != nil && tree.left != nil {
+              ch <- tree.left
+              ch <- tree.right
+              new_node := <- ch
+              bfs_rec( new_node, ch, path, indx )
+
+          } else if tree.right != nil {
+              ch <- tree.right
+              new_node := <- ch
+              bfs_rec( new_node, ch, path, indx )
+
+          } else if tree.left != nil {
+              ch <- tree.left
+              new_node := <- ch
+              bfs_rec( new_node, ch, path, indx )
+
+          } else {
+              select {
+              case new_node := <- ch:
+                  bfs_rec( new_node, ch, path, indx )
+
+              default:
+                  return indx;
+
+              }
+          }
+      }
+      return indx;
+  }
+
+  func bfs ( tree *node, len int ) []int  {
+      path := make([]int, len)
+      ch := make( chan *node,100 )
+      bfs_rec( tree , ch, path, 0 )
+      return path
+  }
+
+  func main () {
+      numbers := [13]int{4, 7, 20, 5, 3, 8, 2, 9, 1, 0, 32, 14, 6}
+      tree := makeBst( numbers )
+      path := bfs( tree, 13 )
       for i := range path {
           fmt.Printf("%d ", path[i])
       }
