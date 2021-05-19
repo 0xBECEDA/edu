@@ -1046,17 +1046,70 @@ https://habr.com/ru/company/otus/blog/472040/
 
 ** Вставка на лиспе
 Согласно описанным выше правилам, закодиваем алгоритм вставки.
-Каждый узел будет содержать значение + цвет (в конс-паре) и два
+Каждый узел будет содержать значение, цвет и два
 указателя на потомков и один - на предка.
 
-По умолчанию цвет узла черный, т.е. cdr конс-пары - это символ 'b (black),
-иначе 'r (red).
-
+По умолчанию все узлы черные.
 #+NAME: r_b_node
 #+BEGIN_SRC lisp :noweb yes
-  (defstruct (node)
-    (elt (cons nil 'b))
-    (parent nil) (l nil) (r nil))
+    (defstruct (node (:print-function (lambda (n s d)
+                                        (print-tree s n d))))
+      (elt nil)
+      (color 'black)
+      (parent nil) (l nil) (r nil))
+
+#+END_SRC
+
+Пишем процедуру для печати дерева - обычная печать не подойдет, поскольку
+вызовет нескончаемую рекурсию из-за наличия поля "parent" в структуре.
+
+#+NAME: print-r-b-tree
+#+BEGIN_SRC lisp :noweb yes
+  (defun print-space (n)
+    (if (= n 0)
+        t
+        (progn
+          (format t " ")
+          (print-space (decf n)))))
+
+  (defun print-node-values (stream string node)
+    (if (null node)
+        (format stream "NIL ~%")
+        (format stream "#~A < ~A > ~%"
+                string
+                (node-elt node))))
+
+
+  (defun print-child (stream string child level)
+    (print-space  (expt level 2))
+    (format stream "~A " string)
+    (print-tree-rec stream child level))
+
+  (defun print-node-color (stream string color level)
+    (print-space  (expt level 2))
+    (format stream "~A ~A ~%" string color))
+
+  (defun print-parent-values (stream parent level)
+    (print-space (expt level 2))
+    (format stream ":PARENT ")
+    (print-node-values stream "" parent))
+
+  (defun print-tree-rec (stream tree level)
+    (if (null tree)
+        (print-node-values stream "" tree)
+        (progn
+          (print-node-values stream "NODE" tree)
+          (print-node-color stream ":COLOR" (node-color tree) (+ 1 level))
+          (print-parent-values stream (node-parent tree) (+ 1 level))
+          (print-child stream ":LEFT" (node-l tree) (+ 1 level))
+          (print-child stream ":RIGHT" (node-r tree) (+ 1 level))
+          (format stream "~%" ))))
+
+  (defun print-tree (stream tree d)
+    (format stream "~%" )
+      (print-tree-rec stream tree d))
+
+  (print-tree t (make-node :elt 3) 1)
 #+END_SRC
 
 Реализуем суб-процедуры. Процедуры перекрашивания узла в черный и
@@ -1065,13 +1118,10 @@ https://habr.com/ru/company/otus/blog/472040/
 #+NAME: recolor_node
 #+BEGIN_SRC lisp :noweb yes
   (defun recolor-red (node)
-    (setf (cdr (node-elt node)) 'r))
+    (setf (node-color node) 'red))
 
   (defun recolor-black (node)
-    (setf (cdr (node-elt node)) 'b))
-
-  ;; (setf test-node (make-node :elt (cons 2 'r)))
-  ;; (recolor-black test-node)
+    (setf (node-color node) 'black))
 #+END_SRC
 
 Предкат, который будет определять цвет узла:
@@ -1079,26 +1129,50 @@ https://habr.com/ru/company/otus/blog/472040/
 #+NAME: predicats
 #+BEGIN_SRC lisp :noweb yes
   (defun red? (node)
-    (equal (cdr (node-elt node)) 'r))
+    (equal (node-color node) 'red))
 
-  ;; (red? test-node)
+  ;; (defun black? (node)
+  ;;   (if (null node)
+  ;;       nil
+  ;;       (equal (cdr (node-elt node)) 'b)))
+
+  (defun black? (node)
+    (equal (node-color node) 'black))
+
+  (defun on-one-side? (grand-dad dad new-node)
+    (if (null grand-dad)
+        (or (equal (node-l dad) new-node)
+            (equal (node-r dad) new-node))
+        (or (and (equal (node-l grand-dad)
+                        dad)
+                 (equal (node-l dad)
+                        new-node))
+            (and (equal (node-r grand-dad)
+                        dad)
+                 (equal (node-r dad)
+                        new-node)))))
+
+  (defun leaf? (node)
+    (if (null node)
+        nil
+        (and (black? node) (null (node-elt node)))))
 #+END_SRC
 
 Процедуры, возвращающие дядю, папу, дедушку, брата узла или его значение:
-#+NAME: predicats
+#+NAME: get_relatives
 #+BEGIN_SRC lisp :noweb yes
-  (defun get-value (elt)
-    (car elt))
-
   (defun get-dad (node)
     (node-parent node))
 
   (defun get-brother (node)
     (let ((dad (get-dad node)))
-      (if ( = (get-value (node-l dad))
-              (get-value node))
-          (node-r dad)
-          (node-l dad))))
+      (if (null dad)
+          nil
+          (let* ((left (node-l dad))
+                 (elt (node-elt left)))
+            (if (equal elt (node-elt node))
+              (node-r dad)
+              (node-l dad))))))
 
   (defun get-grand-dad (node)
     (node-parent (get-dad node)))
@@ -1106,10 +1180,11 @@ https://habr.com/ru/company/otus/blog/472040/
   (defun get-uncle (node)
     (let ((dad (get-dad node))
           (grand-dad (get-grand-dad node)))
-      (if ( = (get-value (node-l grand-dad))
-              (get-value dad))
+      (if (equal (node-elt (node-l grand-dad))
+                 (node-elt dad))
           (node-r grand-dad)
           (node-l grand-dad))))
+
 #+END_SRC
 
 Процедура добавляет два листа к узлу:
@@ -1117,29 +1192,43 @@ https://habr.com/ru/company/otus/blog/472040/
 #+NAME: add_leafs
 #+BEGIN_SRC lisp :noweb yes
   (defun add-leafs (node)
-    (setf (node-l node) (make-node)
-          (node-r node) (make-node)))
+    (setf (node-l node) (make-node :parent node)
+          (node-r node) (make-node :parent node))
+    node)
 #+END_SRC
 
 Процедура, устанавливающая новые "родственные связи" между
 узлами. Т.е. просто заменяет заданный потом у узла.
 Принимает родительский узел, узел, который надо заменить, и узел, которым заменяем.
 
-#+NAME: set-new-child
+#+NAME: set_new_child
 #+BEGIN_SRC lisp :noweb yes
   (defun set-new-child (parent-node old-child-node new-child-node)
+    ;; (format t "set-new-child parent node: ")
+    ;; (print-tree t parent-node 1)
+    ;; (format t "set-new-child old node: ")
+    ;; (print-tree t old-child-node 1)
+    ;; (format t "set-new-child new node: ")
+    ;; (print-tree t new-child-node 1)
     (if (equal (node-elt (node-l parent-node)) (node-elt old-child-node))
-        (setf (node-parent new-child-node) parent-node
-              (node-l parent-node) new-child-node)
-        (setf (node-parent new-child-node) parent-node
-              (node-r parent-node) new-child-node)))
+        (progn
+          (format t "set left child ~%")
+          (setf (node-parent new-child-node) parent-node
+                (node-l parent-node) new-child-node)
+          ;; (format t "new parent node: ")
+          ;; (print-tree t parent-node 1)
+          )
+        (progn
+          (format t "set right child ~%")
+          (setf (node-parent new-child-node) parent-node
+                (node-r parent-node) new-child-node))))
 #+END_SRC
 
 Теперь пишем процедуру, которая перекрасит папу и дядю вставляемого узла
 в черный, если они оба красные. В этом случае, перекрасив их, мы без
 проблем сможем вставить новый красный узел.
 
-#+NAME: recolor-black-dad-and-uncle
+#+NAME: recolor_black_dad_and_uncle
 #+BEGIN_SRC lisp :noweb yes
   (defun recolor-black-dad-and-uncle (node)
     (let* ((dad-node (get-dad node))
@@ -1194,23 +1283,52 @@ https://habr.com/ru/company/otus/blog/472040/
   брат.
 - устанавливаем в качестве потомков дедушки 2 черных листа
 
-#+NAME: rotate_if_uncle_black
+#+NAME: rotate_if_uncle_black_one_side
 #+BEGIN_SRC lisp :noweb yes
   (defun rotate-if-uncle-black-one-side (node)
     (let* ((dad (get-dad node))
-           (uncle (get-uncle node))
            (grand-dad (get-grand-dad node))
            (grand-grand-dad (get-dad grand-dad)))
+      (format t " rotate-if-uncle-black-one-side grand dad: ")
+      (print-tree t grand-dad 1)
       ;; перекрасили папу и дедушку
       (recolor-black dad)
       (recolor-red grand-dad)
-      ;; папа заменяет дедушку
-      (set-new-child grand-grand-dad grand-dad dad)
-      ;; дедушка заменяет брата
-      (set-new-child dad (get-brother node) grand-dad)
-      ;; устанавливаем дедушке вместо потомков два черных листа
-      (add-leafs grand-dad)))
+      (let ((grand-dad-elt (node-elt grand-dad))
+            (grand-dad-color (node-color grand-dad)))
+        ;; (format t "copy grand-dad ~%")
+        ;; (print-tree t copy-grand-dad 1)
+        ;; дедушка - это корень (т.е. нет прадедушки)?
+        (if (null grand-grand-dad)
+            ;; папа становится новым корнем
+            (progn
+              (make-new-root grand-dad dad)
+              (if (null (node-elt (node-l grand-dad)))
+                  (setf (node-l grand-dad) (make-node :elt grand-dad-elt
+                                                :color grand-dad-color))
+                  (setf (node-r grand-dad) (make-node :elt grand-dad-elt
+                                                      :color grand-dad-color))))
 
+              ;; ;; копия дедушки становится на место брата
+              ;; (format t " rotate-if-uncle-black-one-side dad: ")
+              ;; (print-tree t dad 1)
+              ;; dad)
+            (progn
+            ;; папа заменяет дедушку
+            (set-new-child grand-grand-dad grand-dad dad)
+            ;; дедушка заменяет брата
+            (set-new-child dad (get-brother node) grand-dad)
+            (format t " rotate-if-uncle-black-one-side dad: ")
+            ;; устанавливаем дедушке вместо потомков два черных листа
+            (add-leafs grand-dad)
+            (print-tree t dad 1)
+            dad)))))
+
+  (defun make-new-root (old-node new-node)
+    (setf (node-color old-node) (node-color new-node)
+          (node-elt old-node) (node-elt new-node)
+          (node-l old-node) (node-l new-node)
+          (node-r old-node) (node-r new-node)))
 #+END_SRC
 
 Но есть ситуация хуже, чем когда папа красный, дядя черный, и дедушка,
@@ -1226,45 +1344,129 @@ https://habr.com/ru/company/otus/blog/472040/
 уже вращаем поддерево с помощью процедуры
 ~rotate-if-uncle-black-one-side~, которую написали выше.
 
-#+NAME: rotate_if_uncle_black
+Для этого нам банально нужно поменять папу и новый узел местами. Новый
+узел станет папой, а папа - встанет вместо нового узла.
+А уже из этого состояния мы вызовем ~rotate-if-uncle-black-one-side~.
+
+#+NAME: rotate_if_uncle_black_diffrnt_sides
 #+BEGIN_SRC lisp :noweb yes
   (defun rotate-if-uncle-black-diffrnt-sides (node)
-
-    )
+    (let ((dad (get-dad node))
+          (grand-dad (get-grand-dad node)))
+      (set-new-child grand-dad dad node)
+      (add-leafs dad)
+      (if (< (get-value (node-elt dad))
+             (get-value (node-elt node)))
+          (progn
+            (setf (node-l node) dad)
+            (rotate-if-uncle-black-one-side dad))
+          (progn
+            (setf (node-r node) dad)
+            (rotate-if-uncle-black-one-side dad)))))
 #+END_SRC
 
 #+NAME: insert_in_red_black_tree
-#+BEGIN_SRC lisp :noweb yes
+#+BEGIN_SRC lisp :noweb yes :tangle r-b-tree.lisp
+  <<print-r-b-tree>>
   <<r_b_node>>
+  <<recolor_node>>
+  <<predicats>>
+  <<get_relatives>>
+  <<add_leafs>>
+  <<set_new_child>>
+  <<recolor_black_dad_and_uncle>>
+  <<rotate_if_uncle_black_one_side>>
+  <<rotate_if_uncle_black_diffrnt_sides>>
 
-  (defun get-value (elt)
-    (car elt))
+  (defun recombine-tree (tree new-node)
+    (print-tree t tree 1)
+    (let* ((dad tree)
+           (grand-dad (get-grand-dad new-node))
+           (uncle (get-brother dad)))
+      ;; вставка была в корень корень
+      (cond ((and (black? dad) (null uncle) (null grand-dad))
+             tree)
+            ;; дядя и папа- красные
+            ((and (red? dad) (red? uncle))
+             (progn
+               (format t "both are red ~%")
+               (recolor-black-dad-and-uncle new-node)))
+            ;; дядя черный, папа красный,
+            ;; папа, дед и новый узел - на одной стороне
+            ((and (on-one-side? grand-dad dad new-node)
+                  (black? uncle)
+                  (red? dad))
+             (progn
+               (format t "one side ~%")
+               (rotate-if-uncle-black-one-side new-node)))
+            ;; дядя черный, папа красный,
+            ;; папа, дед и новый узел - на разных сторонах
+            ((and (not (on-one-side? grand-dad dad new-node))
+                  (black? uncle)
+                  (red? dad))
+             (progn
+               (format t "diffrnt sides ~%")
+               (rotate-if-uncle-black-diffrnt-sides new-node)))
+            ;; папа черный, ничего пережелывать не надо
+            (t tree))))
 
-  (defun insert-in-red-black-tree-rec (tree parent elt)
+  (defun insert-in-red-black-tree-rec (tree elt)
     (if (null tree)
-        (make-node :elt (cons elt 'b))
-        (let ((node-value (get-value (node-elt tree))))
+        (add-leafs (make-node :elt elt))
+        (let ((node-value (node-elt tree)))
+          (format t "tree elt ~A ~%" node-value)
           (cond ((< elt node-value)
                  ;; левая ветка
-                 (if (null (get-value (node-elt (node-l tree))))
+                 (if (leaf? (node-l tree))
                      ;; вставка
                      (progn
-                       )
+                       ;; вставили новую красную ноду и добавили к ней
+                       ;; 2 черных листа
+                       (format t "left leaf ~%")
+                       (setf (node-l tree)
+                             (add-leafs (make-node :elt elt
+                                                   :color 'red
+                                                   :parent tree)))
+                       (recombine-tree tree (node-l tree)))
                      ;; иначе идем дальше
-                     (insert-in-red-black-tree-rec (node-l tree) tree elt)
+                     (insert-in-red-black-tree-rec (node-l tree) elt)))
 
-                 )
-                 ((> elt node-value)
-                  ;; правая ветка
-                  (if (null (get-value (node-elt (node-r tree))))
-                      ;; вставка
-                      (progn
-                        )
-                      ;; иначе идем дальше
-                      (insert-in-red-black-tree-rec (node-r tree) tree elt)
+                ((> elt node-value)
+                 ;; правая ветка
+                 (if (leaf? (node-r tree))
+                     ;; вставка
+                     (progn
+                       (format t "right leaf ~%")
+                       (setf (node-r tree)
+                             (add-leafs (make-node :elt elt
+                                                   :color 'red
+                                                   :parent tree)))
+                       (recombine-tree tree (node-r tree)))
+                     ;; иначе идем дальше
+                     (insert-in-red-black-tree-rec (node-r tree) elt)))
+                (t tree)))))
 
-                 )
-                (t tree)
+  (defun make-red-black-tree (lst)
+    (defun make-red-black-tree-rec (tree lst)
+      (if (null lst)
+          tree
+          (progn
+            (insert-in-red-black-tree-rec tree (car lst))
+            (make-red-black-tree-rec (cdr lst)))))
+    (make-red-black-tree-rec (insert-in-red-black-tree-rec nil (car lst))
+                             (cdr lst)))
 
-    ))))
+
+  (setf test-tree (insert-in-red-black-tree-rec nil 1))
+  (insert-in-red-black-tree-rec test-tree 2)
+  (insert-in-red-black-tree-rec test-tree 3)
+  (insert-in-red-black-tree-rec test-tree 4)
+  (insert-in-red-black-tree-rec test-tree 5)
+
+
+  ;; (get-brother (node-r test-tree))
+
+  ;; (insert-in-red-black-tree-rec nil 1)
+
+  ;; (make-red-black-tree '(1 2 3 4 5))
 #+END_SRC
