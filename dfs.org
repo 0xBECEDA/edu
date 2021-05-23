@@ -1,0 +1,231 @@
+
+* Интро
+
+Реализация поиска обхода графа в глубину
+
+* Описание алгоритма
+
+Это алгоритм позволяет в любом связном простом графе найти его дерево.
+- берем первую вершину
+- находим первую смежную с ней, которая еще не включена в наше искомое
+  дерево
+- занимаем ее, ищем ближайшую вершину, смежную с ней и т.д.
+
+Так до тех пор, пока не останется смежных вершин у какой-то вершины на
+текущем шаге рекурсии. Тогда возвращаемся на предыдущий шаг рекурсии, и
+ищем еще одну незанятую вершину и обходим это поддерево - при этом
+вершины, которые мы обошли (и зашли в тупик) никуда из искомого дерева не
+деваются. Наша цель - просто обойти весь граф таким образом, чтоб
+избавиться от циклов - т.е. ни одна смежная вершина не должна быть уже
+частью дерева, тогда мы можем включить ее в дерево.
+
+Алгоритм заканчивает работу, когда все необойденные вершины кончаются.
+
+* Поиск в глубину на бинарном дереве
+
+*** На лиспе
+
+Сначала строим бинарное дерево, используя уже известные процедуры из
+[[file:bin_search.org]] :
+
+#+BEGIN_SRC lisp
+  (setf test-tree (make-bst '(4 7 20 5 3 8 2 9 1 0 32 14 6)))
+#+END_SRC
+
+Поскольку известно, что все деревья ациклические, то не надо проверять,
+не образует ли маршрут обходов циклов. Так же у бинарного дерева максимум
+2 ветки всегда, что тоже сильно облегчает жизнь.
+
+Процедура по обходу принимает дерево, а возвращает список вершин в том
+порядке, в котором она его обошла.
+
+
+#+NAME dfs_lisp
+#+BEGIN_SRC lisp :tangle lisp_alg.lisp
+  (defun dfs-rec (bst-tree list-of-nodes)
+    (if (null bst-tree)
+        list-of-nodes
+        (progn
+          (setf list-of-nodes (append list-of-nodes (list (node-elt bst-tree))
+                                      (dfs-rec (node-r bst-tree) '())
+                                      (dfs-rec (node-l bst-tree) '())))
+          list-of-nodes)))
+
+
+  (defun dfs (tree)
+    (dfs-rec tree '()))
+
+  (dfs test-tree '())
+#+END_SRC
+
+*** На си
+
+Делаем аналогично на си.
+
+#+NAME dfs_c
+#+BEGIN_SRC c :tangle dfs.c
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  struct node {
+      int elt;
+      struct node * left;
+      struct node * right;
+  };
+
+
+  /* вставляет элемент в дерево */
+  struct node* insert_bst ( struct node * tree, int obj ) {
+
+      if ( NULL == tree ) {
+          struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+          new_node->elt = obj;
+          return new_node;
+
+      } else if ( obj > tree->elt) {
+
+          if ( tree->right == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->right = new_node;
+              return tree;
+          }
+          insert_bst ( tree->right, obj );
+
+      } else if ( obj < tree->elt) {
+
+          if ( tree->left == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->left = new_node;
+              return tree;
+          }
+          insert_bst ( tree->left, obj );
+      } else {
+          return tree;
+      }
+  }
+
+  /* строит дерево */
+  struct node* make_bst ( int numbers[], int len ) {
+      struct node* tree = insert_bst( NULL, numbers[0] );
+
+      for (int i = 1; i < len; i++ ) {
+          insert_bst( tree,  numbers[i]);
+      }
+      return tree;
+  }
+
+  /* ищет путь в глубину */
+  int* dfs (struct node* tree, int len ) {
+      int *path  =  (int*)malloc( (sizeof( int ) ) * len);
+      int *path_duble = path;
+
+      int dfs_rec ( struct node* tree ) {
+          if ( NULL == tree ) {
+              return 0;
+
+          } else {
+              ,*path = tree->elt;
+              path++;
+              dfs_rec( tree->right );
+              dfs_rec( tree->left );
+          }
+      }
+      dfs_rec(tree);
+      return path_duble;
+  }
+
+  int main () {
+      int numbers[13] = {4, 7, 20, 5, 3, 8, 2, 9, 1, 0, 32, 14, 6,};
+      struct node* tree = make_bst( numbers, 13 );
+      int* dfs_path = dfs( tree, 13 );
+
+      for (int i = 0; i < 13; i++ ) {
+          printf("%d ",  *dfs_path);
+          dfs_path++;
+      }
+      printf("\n");
+  }
+#+END_SRC
+
+*** На го
+
+#+NAME dfs_go
+#+BEGIN_SRC go :tangle dfs_go.go
+  package main
+
+  import ("fmt")
+
+  type node struct {
+      elt int
+      left *node
+      right *node
+  }
+
+  func insertBst( tree *node, obj int ) *node {
+      if tree == nil {
+          newTree := node{ elt: obj }
+          return &newTree
+
+      } else if ( obj > tree.elt ) {
+
+          if ( tree.right == nil ) {
+              newNode := node{ elt: obj }
+              tree.right = &newNode
+              return tree
+          } else {
+              insertBst( tree.right, obj )
+          }
+      } else if ( obj < tree.elt ) {
+
+          if ( tree.left == nil ) {
+              newNode := node{ elt: obj }
+              tree.left = &newNode
+              return tree
+          } else {
+              insertBst( tree.left, obj )
+          }
+      }
+      return tree
+  }
+
+  func makeBst ( numbers [13]int ) *node {
+      tree := insertBst( nil, numbers[0] )
+
+      for i := range numbers {
+          insertBst( tree, numbers[i] )
+      }
+      return tree
+  }
+
+  func dfs_rec( tree *node, path []int, indx int) int {
+      if nil == tree {
+          return indx
+
+      } else {
+          path[indx] = tree.elt
+          indx++
+          indx = dfs_rec( tree.right, path, indx )
+          indx = dfs_rec( tree.left, path, indx )
+      }
+      return indx
+  }
+
+  func dfs( tree *node, len int ) []int {
+      path := make([]int, len)
+      dfs_rec(tree, path, 0)
+      return path
+  }
+
+  func main () {
+      numbers := [13]int{4, 7, 20, 5, 3, 8, 2, 9, 1, 0, 32, 14, 6}
+      tree := makeBst( numbers )
+      path := dfs(tree, 13)
+
+      for i := range path {
+          fmt.Printf("%d ", path[i])
+      }
+      fmt.Printf("\n")
+  }
+#+END_SRC

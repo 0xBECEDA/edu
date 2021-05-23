@@ -1,0 +1,228 @@
+* Интро
+
+Реализация алгорима по построению бинарного дерева.
+В лучшем случае сложность O(logN). В худшем O(n) - когда в деево
+добавляются элементы только слева или только спарва.
+
+* На лиспе
+
+#+NAME bst_lisp
+#+BEGIN_SRC lisp :tangle lisp_alg.lisp
+  ;; структура ноды
+  (defstruct (node)
+    elt (l nil) (r nil))
+
+  ;; вставка в дерево
+  (defun insert-bst (tree obj)
+    (if (null tree)
+        (make-node :elt obj)
+        (let ((elt (node-elt tree)))
+          (cond (( > obj elt)
+                 (if (null (node-r tree))
+                     (setf (node-r tree) (make-node :elt obj))
+                     (insert-bst (node-r tree) obj)))
+                (( < obj elt)
+                 (if (null (node-l tree))
+                     (setf (node-l tree) (make-node :elt obj))
+                     (insert-bst (node-l tree) obj)))
+                (t tree)))))
+
+  ;; создание дерева
+  (defun make-bst (lst)
+    (defun make-bst-rec (bst-tree lst)
+      (if (null lst)
+          bst-tree
+          (progn
+            (insert-bst bst-tree (car lst))
+            (make-bst-rec bst-tree (cdr lst)))))
+    (make-bst-rec (insert-bst nil (car lst)) (cdr lst)))
+
+  ;; тесты
+  (make-bst '(1 2 3 4 5 6))
+  (make-bst '(4 7 20 5 3 8 2 9 2))
+
+#+END_SRC
+
+* На си
+
+#+NAME: bst_c
+#+BEGIN_SRC c :tangle bst.c
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  struct node {
+      int elt;
+      struct node * left;
+      struct node * right;
+  };
+
+
+  int print_space ( int space ) {
+      for( int i = 0; i < space; i++ ) {
+          printf(" ");
+      }
+  }
+
+  int print_string_with_spaces (char string[], int space ) {
+      print_space ( space );
+      printf("%s", string );
+  }
+
+  int print_bst_tree_rec ( struct node * tree, int space  ) {
+
+      if ( NULL == tree ) {
+          printf(" nil \n");
+          return 0;
+      }
+
+      print_space ( 2 );
+      printf("*NODE*: %d \n", tree->elt);
+
+      print_string_with_spaces( "r:", space);
+      print_bst_tree_rec ( tree->right, space + 5);
+
+      print_string_with_spaces( "l:", space);
+      print_bst_tree_rec ( tree->left, space + 5);
+  }
+
+  int print_bst_tree ( struct node * tree ) {
+      print_bst_tree_rec ( tree, 2 );
+  }
+
+  struct node* insert_bst ( struct node * tree, int obj ) {
+
+      if ( NULL == tree ) {
+          struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+          new_node->elt = obj;
+          return new_node;
+
+      } else if ( obj > tree->elt) {
+
+          if ( tree->right == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->right = new_node;
+              return tree;
+          }
+          insert_bst ( tree->right, obj );
+
+      } else if ( obj < tree->elt) {
+
+          if ( tree->left == NULL ) {
+              struct node* new_node = (struct node*)malloc(sizeof( struct node ) );
+              new_node->elt = obj;
+              tree->left = new_node;
+              return tree;
+          }
+          insert_bst ( tree->left, obj );
+      } else {
+          return tree;
+      }
+  }
+
+  struct node* make_bst ( int numbers[], int len ) {
+      struct node* tree = insert_bst( NULL, numbers[0] );
+
+      for (int i = 1; i < len; i++ ) {
+          insert_bst( tree,  numbers[i]);
+      }
+      return tree;
+  }
+
+  int main () {
+      int numbers[10] = {5, 9, 0, 1, 6, 10, 5, 3, 2, 8};
+      struct node* tree = make_bst( numbers, 10 );
+      print_bst_tree ( tree );
+  }
+
+#+END_SRC
+
+* На го
+
+#+NAME: bst_go
+#+BEGIN_SRC go :tangle bst_go.go
+  package main
+
+  import ( "fmt" )
+
+  type node struct {
+      elt int
+      left *node
+      right *node
+  }
+
+  func printSpace( space int ) {
+      for i := 0; i < space; i++ {
+          fmt.Printf(" ")
+      }
+  }
+
+  func printStringWithSpace( space int, msg string ) {
+      printSpace( space )
+      fmt.Printf("%s", msg)
+  }
+
+  func printTree ( tree *node) {
+      printTreeRec ( tree, 1)
+  }
+
+  func printTreeRec ( tree *node, space int ) {
+
+      if tree == nil {
+          fmt.Printf("nil \n")
+
+      } else {
+          printSpace(1)
+          fmt.Printf("*NODE*: %d \n", tree.elt)
+
+          printStringWithSpace( space, "r: ")
+          printTreeRec ( tree.right, space + 5 )
+
+          printStringWithSpace( space, "l: ")
+          printTreeRec ( tree.left, space + 5 )
+      }
+  }
+
+
+  func insertBst( tree *node, obj int ) *node {
+      if tree == nil {
+          newTree := node{ elt: obj }
+          return &newTree
+
+      } else if ( obj > tree.elt ) {
+
+          if ( tree.right == nil ) {
+              newNode := node{ elt: obj }
+              tree.right = &newNode
+              return tree
+          } else {
+              insertBst( tree.right, obj )
+          }
+      } else if ( obj < tree.elt ) {
+
+          if ( tree.left == nil ) {
+              newNode := node{ elt: obj }
+              tree.left = &newNode
+              return tree
+          } else {
+              insertBst( tree.left, obj )
+          }
+      }
+      return tree
+  }
+
+  func makeBst ( numbers [10]int ) *node {
+      tree := insertBst( nil, numbers[0] )
+
+      for i := range numbers {
+          insertBst( tree, numbers[i] )
+      }
+      return tree
+  }
+
+  func main () {
+      numbers := [10]int{4, 6, 1, 0, 2, 3, 3, 8, 10, 5}
+      printTree( makeBst( numbers ) )
+  }
+
+#+END_SRC
