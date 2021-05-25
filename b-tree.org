@@ -1,0 +1,493 @@
+* Интро
+Реализация b-дерева.
+
+* Свойства дерева
+
+- дерево сильно ветвистое - имеет более 2х потомков - и
+  сбалансированное - длина пути от корня до любого листа одинаковая
+
+- количество значений в узле зависит от его порядка
+
+- если корень - это узел без листьев, он должен иметь минимум 2х потомков
+
+- если в узле n-1 значений, то узел должен иметь n потомков
+
+- все узлы без листьев, кроме корня (т.е. все внутренние узлы), должны
+  иметь минимум m/2 потомков.
+
+- все узлы, кроме корня должны иметь как минимум (m/2) – 1 ключей и
+  максимум m-1 ключей.
+
+- все значения в узлах должны быть расположены в порядке их возрастания.
+
+Это значит, что если дерево 4го порядка, то:
+- в каждом его узле (кроме корня, когда осуществляется вставка первого
+  элемента в деево) - будет минимум 2 значения или максимум 3
+
+- максимальное кол-во потомков у узла - 4
+
+* Описание алгоритма вставки
+
+Движемся по дереву от корня к листу, используя логику прохода по
+бинарному дереву: если текущиъ элемент меньше всех значений в текущем
+узле, выбираем самого левого потомка, если больше первого значения, но
+менье второго - выбираем второго потомка слева и движемся по нему и т.д.
+
+Доходим до листа.
+
+- если в этом узле есть пустой "слот" для значения,
+вставляем элемент и сортируем их от меньшего к большему.
+
+В противном случае:
+
+- рассекаем текущий лист на два самостоятельных узла
+
+- средний элемент из листа "отставляем в сторону" - он не войдет ни в
+  один из новых узлов
+
+- анализируем, какой из новых узлов подходит для вставки текущего
+  элемента
+
+- соединяем два новых узла с родительским узлом указателями
+
+- теперь средний элемент из рассеченного узла становится новым элементом
+  для вставки. Чтоб его вставить, мы двигаемся от листа к корню по
+  родительским узлам по заданному алгоритму вставки до тех пор, пока не
+  удастся вставить элемент в какой-то узел. Возможно ради этого придется
+  создать новый корень.
+
+* Реализация вставки в дерво 4 порядка
+
+#+BEGIN_SRC lisp
+  (defun print-space (n)
+    (if (= n 0)
+        t
+        (progn
+          (format t " ")
+          (print-space (decf n)))))
+
+  (defun print-node-values (stream string node)
+    (if (null node)
+        (format stream "NIL ~%")
+        (format stream "#~A <~A ~A ~A> ~%"
+                string
+                (node-elt1 node)
+                (node-elt2 node)
+                (node-elt3 node))))
+
+  (defun print-child (stream string child level)
+    (print-space  (expt level 2))
+    (format stream "~A " string)
+    (print-tree-rec stream child level))
+
+  (defun print-parent-values (stream parent level)
+    (print-space (expt level 2))
+    (format stream ":PARENT ")
+    (print-node-values stream "" parent))
+
+  (defun print-tree-rec (stream tree level)
+    (if (null tree)
+        (print-node-values stream "" tree)
+        (progn
+          (print-node-values stream "NODE" tree)
+          (print-parent-values stream (node-parent tree) (+ 1 level))
+          (print-child stream ":CHILD1" (node-child1 tree) (+ 1 level))
+          (print-child stream ":CHILD2" (node-child2 tree) (+ 1 level))
+          (print-child stream ":CHILD3" (node-child3 tree) (+ 1 level))
+          (print-child stream ":CHILD4" (node-child4 tree) (+ 1 level))
+          (format stream "~%" ))))
+
+  (defun print-tree (stream tree d)
+    (format stream "~%" )
+    (print-tree-rec stream tree d))
+  (defstruct (node (:print-function (lambda (n s d)
+                                      (print-tree s n d))))
+    elt1 elt2 elt3
+    (parent nil)
+    (child1 nil)
+    (child2 nil)
+    (child3 nil)
+    (child4 nil))
+
+
+  (defun full? (node)
+    (and (not (null (node-elt1 node)))
+         (not (null (node-elt2 node)))
+         (not (null (node-elt3 node)))))
+
+  (defun check-order (node)
+    (< (node-elt1 node)
+       (node-elt2 node)
+       (node-elt3 node)))
+
+  (defun leaf? (node)
+    (and (null (node-child1 node))
+         (null (node-child2 node))
+         (null (node-child3 node))
+         (null (node-child4 node))))
+
+  ;; тесты
+  (leaf? (make-node :elt1 3))
+  (leaf? (make-node :elt1 3 :child1 (make-node :elt1 4)))
+
+  (defun equal-key? (node key)
+    (or (equal (node-elt1 node) key)
+        (equal (node-elt2 node) key)
+        (equal (node-elt3 node) key)))
+
+  (defun get-any-elt (node)
+    (cond ((null node) node)
+          ((not (null (node-elt1 node)))
+           (node-elt1 node))
+          ((not (null (node-elt2 node)))
+           (node-elt2 node))
+          (t (node-elt3 node))))
+
+  (setf test (make-node :elt2 4
+                        :elt3 3))
+
+  (setf test (make-node :elt1 0
+                        :elt2 4
+                        :elt3 3))
+  (get-any-elt test)
+
+
+  (defun sort-childs (list-of-nodes)
+    (sort list-of-nodes (lambda (node1 node2)
+                          (let ((elt1 (get-any-elt node1))
+                                (elt2 (get-any-elt node2)))
+                            (if (and (not (null elt1))
+                                     (not (null elt2))
+                                     (< elt1 elt2))
+                                node1)))))
+
+  (defun sort-values-in-node (list-of-values)
+    (sort list-of-values (lambda (elt1 elt2)
+                           (if (and (not (null elt1))
+                                    (not (null elt2))
+                                    (< elt1 elt2))
+                               elt1))))
+
+  ;; (setf test (make-node :elt1 2
+  ;;                       :elt2 3
+  ;;                       :elt3 4))
+
+  ;; (setf test2 (make-node :elt1 6
+  ;;                       :elt2 8
+  ;;                       :elt3 3))
+
+  ;; (setf test3 (make-node :elt2 9
+  ;;                        :elt3 10))
+
+  ;; (sort-childs (list test test2 test3 nil))
+
+
+  (defun recombine-node (node)
+    (let* ((list-of-values
+            (list (node-elt1 node)
+                  (node-elt2 node)
+                  (node-elt3 node)))
+           (list-of-childs
+            (list (node-child1 node)
+                  (node-child2 node)
+                  (node-child3 node)
+                  (node-child4 node)))
+           (sorted-list-of-values
+            (sort-values-in-node list-of-values))
+           (sorted-list-of-childs
+            (sort-childs list-of-childs)))
+      (setf (node-elt1 node) (car sorted-list-of-values)
+            (node-elt2 node) (cadr sorted-list-of-values)
+            (node-elt3 node) (caddr sorted-list-of-values))
+      (setf (node-child1 node) (car sorted-list-of-childs)
+            (node-child2 node) (cadr sorted-list-of-childs)
+            (node-child3 node) (caddr sorted-list-of-childs)
+            (node-child4 node) (cadddr sorted-list-of-childs)))
+    node)
+
+
+  ;; (setf test (make-node :elt1 -4
+  ;;                       :elt2 0))
+
+  ;; (setf test2 (make-node :elt1 2))
+
+  ;; (setf test3 (make-node :elt1 5
+  ;;                        :elt2 6
+  ;;                        :elt3 12))
+
+  ;; (setf test4 (make-node :elt1 20
+  ;;                        :elt2 32
+  ;;                        :elt3 36))
+
+  ;; (setf tree (make-node :elt1 18
+  ;;                       :elt2 1
+  ;;                       :elt3 3
+  ;;                       :child1 test
+  ;;                       :child2 test2
+  ;;                       :child3 test3
+  ;;                       :child4 test4))
+
+  ;; (recombine-node tree)
+
+  ;; (setf tree2 (make-node :elt1 18
+  ;;                        :elt2 1
+  ;;                        :elt3 3
+  ;;                        :child1 test2
+  ;;                        :child2 test
+  ;;                        :child3 test4
+  ;;                        :child4 test3))
+  ;; (recombine-node tree2)
+
+  ;; (setf tree2 (make-node :elt1 3
+  ;;                        :elt2 18
+  ;;                        :elt3 3
+  ;;                        :child1 test4
+  ;;                        :child2 test2
+  ;;                        :child3 test3
+  ;;                        :child4 test))
+  ;; (recombine-node tree2)
+
+  (defun insert-key-into-node (node key)
+    (cond ((null (node-elt1 node))
+           (progn
+             (setf (node-elt1 node) key)
+             t))
+          ((null (node-elt2 node))
+           (progn
+             (setf (node-elt2 node) key)
+             t))
+          ((null (node-elt3 node))
+           (progn
+             (setf (node-elt3 node) key)
+             t))
+          (t nil)))
+
+  ;; эта функция собирает все значения узла в список
+  (defun collect-values-from-node (node)
+    (if (null node)
+        '(nil)
+        (list (node-elt1 node) (node-elt2 node) (node-elt3 node))))
+
+
+  ;; эта функция проверяет, не состояит ли полученный от
+  ;; пересечения список только из элементов nil
+  (defun nil-intersection? (lst)
+    (defun nil-intersection-rec (lst n)
+      (if (null lst)
+          n
+          (if (null (car lst))
+              (nil-intersection-rec (cdr lst) (incf n))
+              (nil-intersection-rec (cdr lst) n))))
+    (= (length lst) (nil-intersection-rec lst 0)))
+
+
+  ;; (nil-intersection? '(nil nil nil))
+  ;; (nil-intersection? '(nil 1 nil))
+
+  ;; предикат для определния наличия пересечения между двумя
+  ;; списками при условии, что пересечение - это не элементы nil
+  (defun intersection? (lst1 lst2)
+    (let ((inttersect (intersection lst1 lst2)))
+      (not (nil-intersection? inttersect))))
+
+  (defun append-child-to-node (node child)
+    (if (null child)
+        nil
+        (let ((child1-elts (collect-values-from-node (node-child1 node)))
+              (child2-elts (collect-values-from-node (node-child2 node)))
+              (child3-elts (collect-values-from-node (node-child3 node)))
+              (child4-elts (collect-values-from-node (node-child4 node)))
+              (new-child-elts (collect-values-from-node child)))
+          (cond ((intersection? new-child-elts child1-elts)
+                 (setf (node-child1 node) child
+                       (node-parent child) node))
+                ((intersection? new-child-elts child2-elts)
+                 (setf (node-child2 node) child
+                       (node-parent child) node))
+                ((intersection? new-child-elts child3-elts)
+                 (setf (node-child3 node) child
+                       (node-parent child) node))
+                ((intersection? new-child-elts child4-elts)
+                 (setf (node-child4 node) child
+                       (node-parent child) node))
+                (t (cond ((null (node-child1 node))
+                          (setf (node-child1 node) child
+                                (node-parent child) node))
+                         ((null (node-child2 node))
+                          (setf (node-child2 node) child
+                                (node-parent child) node))
+                         ((null (node-child3 node))
+                          (setf (node-child3 node) child
+                                (node-parent child) node))
+                         ((null (node-child4 node))
+                          (setf (node-child4 node) child
+                                (node-parent child) node))
+                         (t nil)))))))
+
+
+  ;; (setf test (make-node :elt1 -4
+  ;;                       :elt2 0))
+
+  ;; (setf test2 (make-node :elt1 2))
+
+  ;; (setf test3 (make-node :elt1 5
+  ;;                        :elt2 6
+  ;;                        :elt3 12))
+
+  ;; (setf test4 (make-node :elt1 20
+  ;;                        :elt2 32
+  ;;                        :elt3 36))
+
+  ;; (setf test5 (make-node :elt1 20))
+  ;; (setf test6 (make-node :elt1 48))
+
+  ;; (setf tree (make-node :elt1 1
+  ;;                       :elt2 3
+  ;;                       :elt3 18
+  ;;                       :child1 test
+  ;;                       :child2 test2
+  ;;                       :child3 test3
+  ;;                       :child4 test4))
+
+  ;; (append-child-to-node tree test5)
+  ;; (append-child-to-node tree test6)
+  ;; (append-child-to-node tree nil)
+
+  (defun split (tree)
+    (if (full? tree)
+        (let ((left-node (make-node :parent (node-parent tree)
+                                    :elt1 (node-elt1 tree)
+                                    :child1 (node-child1 tree)
+                                    :child2 (node-child2 tree)))
+              (right-node (make-node :parent (node-parent tree)
+                                     :elt1 (node-elt3 tree)
+                                     :child1 (node-child3 tree)
+                                     :child2 (node-child4 tree))))
+          (progn
+            (if (not (null (node-child1 left-node)))
+                (setf  (node-parent (node-child1 left-node)) left-node))
+            (if (not (null (node-child2 left-node)))
+                (setf  (node-parent (node-child2 left-node)) left-node))
+            (if (not (null (node-child1 right-node)))
+                (setf (node-parent (node-child1 right-node)) right-node))
+            (if (not (null (node-child2 right-node)))
+                (setf (node-parent (node-child2 right-node)) right-node))
+            (values left-node right-node)))
+        (values nil nil)))
+
+  (defun recombine-tree (key tree sub-tree1 sub-tree2)
+    ;; (format t " ~% recombine-tree tree ~A" tree)
+    ;; (format t " ~% -------------")
+    (if (null key)
+        (if (null (node-parent tree))
+            tree
+            (recombine-tree key (node-parent tree) sub-tree1 sub-tree2))
+        (if (not (full? tree))
+            (progn
+              (insert-key-into-node tree key)
+              (append-child-to-node tree sub-tree1)
+              (append-child-to-node tree sub-tree2)
+              (recombine-node tree)
+              (if (null (node-parent tree))
+                  tree
+                  (recombine-tree nil (node-parent tree) nil nil)))
+            (let ((median (node-elt2 tree)))
+              (multiple-value-bind (sub-node-left sub-node-right)
+                  (split tree)
+                ;; (format t "~% split left ~A right ~A" sub-node-left sub-node-right)
+                (if (< key median)
+                    (progn
+                      (insert-key-into-node sub-node-left key)
+                      (append-child-to-node sub-node-left sub-tree1)
+                      (append-child-to-node sub-node-left sub-tree2)
+                      (recombine-node sub-node-left)
+                      c        (if (null (node-parent tree))
+                                   (let ((new-root (make-node :elt1 median)))
+                                     (setf (node-parent sub-node-left) new-root)
+                                     (setf (node-parent sub-node-right) new-root)
+                                     (setf (node-child1 new-root) sub-node-left)
+                                     (setf (node-child2 new-root) sub-node-right)
+                                     new-root)
+                                   (recombine-tree median (node-parent tree)
+                                                   sub-node-left sub-node-right)))
+                    (progn
+                      (insert-key-into-node sub-node-right key)
+                      (append-child-to-node sub-node-right sub-tree1)
+                      (append-child-to-node sub-node-right sub-tree2)
+                      (recombine-node sub-node-right)
+                      (if (null (node-parent tree))
+                          (let ((new-root (make-node :elt1 median)))
+                            (setf (node-parent sub-node-left) new-root)
+                            (setf (node-parent sub-node-right) new-root)
+                            (setf (node-child1 new-root) sub-node-left)
+                            (setf (node-child2 new-root) sub-node-right)
+                            new-root)
+                          (recombine-tree median (node-parent tree)
+                                          sub-node-left sub-node-right)))))))))
+
+
+
+  (defun insert-b-tree( key tree )
+    (if (null tree)
+        (setf tree (make-node :elt1 key))
+        (let ((elt1 (node-elt1 tree))
+              (elt2 (node-elt2 tree))
+              (elt3 (node-elt3 tree)))
+          (if (leaf? tree)
+              (recombine-tree key tree nil nil)
+              (cond ((equal-key? tree key) (recombine-tree nil tree nil nil))
+                    ((< key elt1)
+                     (insert-b-tree key (node-child1 tree)))
+                    ((and (> key elt1)
+                          (or (and (not (null elt2))
+                                   (< key elt2))
+                              (null elt2)))
+                     (insert-b-tree key (node-child2 tree)))
+                    ((and (and (not (null elt2))
+                               (> key elt2))
+                          (or (and (not (null elt3))
+                                   (< key elt3))
+                              (null elt3)))
+                     (insert-b-tree key (node-child3 tree)))
+                    (t (insert-b-tree key (node-child4 tree))))))))
+
+  (defun build-b-tree (lst)
+    (defun build-b-tree-rec (lst tree)
+      (if (null lst)
+          tree
+          (build-b-tree-rec (cdr lst) (insert-b-tree (car lst) tree))))
+    (build-b-tree-rec lst nil))
+
+
+  (setf tree (build-b-tree '(0 5 9 13 4 -6 17 32 8)))
+  (setf tree (build-b-tree '(-1 6 3 9 10 56 32 78 8 9 11 44 0 88 30 15)))
+
+
+  (defun search-in-b-tree (key tree)
+    (if (and (leaf? tree)
+             (not (equal-key? tree key)))
+        nil
+        (let ((elt1 (node-elt1 tree))
+              (elt2 (node-elt2 tree))
+              (elt3 (node-elt3 tree)))
+          (cond ((equal-key? tree key) key)
+                ((< key elt1)
+                 (search-in-b-tree key (node-child1 tree)))
+                ((and (> key elt1)
+                      (or (and (not (null elt2))
+                               (< key elt2))
+                          (null elt2)))
+                 (search-in-b-tree key (node-child2 tree)))
+                ((and (and (not (null elt2))
+                           (> key elt2))
+                      (or (and (not (null elt3))
+                               (< key elt3))
+                          (null elt3)))
+                 (search-in-b-tree key (node-child3 tree)))
+                (t (search-in-b-tree key (node-child4 tree)))))))
+
+  ;; (setf tree (build-b-tree '(-1 6 3 9 10 56 32 78 8 9 11 44 0 88 30 15)))
+  ;; (search-in-b-tree -3 tree)
+  ;; (search-in-b-tree 10 tree)
+
+#+END_SRC
