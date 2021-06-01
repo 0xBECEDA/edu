@@ -1,4 +1,4 @@
-package servShortLink
+package main
 
 import
 (
@@ -6,6 +6,7 @@ import
     "fmt"
     "net/http"
     "encoding/base64"
+	"net/url"
 )
 
 const shortLinkLength = 4
@@ -42,13 +43,13 @@ func getFullUrl( shortUrl string ) (string, int) {
 
 func getShortLinkFromRequest( r *http.Request ) string {
 
-    return r.URL.Path[len(r.URL.Path)-shortLinkLength:]
+    return r.URL.RawQuery[len(r.URL.RawQuery)-shortLinkLength:]
 }
 
 func redirect( w http.ResponseWriter, r *http.Request ) {
 
-    shortUrl := getShortLinkFromRequest( r )
-    url, statusCode := getFullUrl( shortUrl )
+	shortUrl, _ := url.QueryUnescape(getShortLinkFromRequest( r ))
+	url, statusCode := getFullUrl( shortUrl )
 
     if statusCode == 303 {
         http.Redirect(w, r, url, http.StatusSeeOther)
@@ -63,14 +64,14 @@ func getLinkCnt( shortUrl string ) int {
 
     val, ok := tableOfLinks[shortUrl]
     if ok == true {
-       return val.Cnt
+		return val.Cnt
     }
     return -1
 }
 
 func getLinkStatistiсs( w http.ResponseWriter, r *http.Request ) {
 
-    shortUrl := getShortLinkFromRequest( r )
+    shortUrl, _ := url.QueryUnescape(getShortLinkFromRequest( r ))
     cnt := getLinkCnt( shortUrl)
 
     if cnt >= 0 {
@@ -85,9 +86,10 @@ func getLinkStatistiсs( w http.ResponseWriter, r *http.Request ) {
 
 func registerNewLink( w http.ResponseWriter, r *http.Request ) {
 
-    if len(r.URL.Path) > 14 {
+	query, _ := url.QueryUnescape(r.URL.RawQuery)
 
-        url := r.URL.Path[14:]
+    if len(query) > 8 {
+        url := query[4:]
         newStruct := fullUrl{ Url: url }
         hash := generateShortURL(url)
         tableOfLinks[hash] = newStruct
@@ -96,15 +98,14 @@ func registerNewLink( w http.ResponseWriter, r *http.Request ) {
         w.Write([]byte(str))
 
     } else {
-    w.Write([]byte("Введена пустая ссылка! Попробуйте еще раз!\n"))
-
+        w.Write([]byte("Введенный url неполный! \n"))
     }
 }
 
 func main () {
 
     s := &http.Server{
-          Addr:           ":8080",
+		Addr:           ":8080",
     }
 
     // обработчики запросов:
