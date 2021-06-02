@@ -9,11 +9,20 @@ import
 	"net/url"
 )
 
-const shortLinkLength = 4
+const hashLength = 4
+const baseUrl = "http://localhost:8080?u="
 
 type fullUrl struct {
     Cnt int
     Url string
+}
+
+type getHashFromRequestError struct {
+	s string
+}
+
+func (e *getHashFromRequestError) Error() string {
+	return e.s
 }
 
 // таблица ссылок
@@ -25,7 +34,7 @@ func generateShortURL (link string) string {
     slice := sum[:]
     encoded := base64.StdEncoding.EncodeToString(slice)
 
-    return encoded[:shortLinkLength]
+    return encoded[:hashLength]
 }
 
 func getFullUrl( shortUrl string ) (string, int) {
@@ -41,81 +50,98 @@ func getFullUrl( shortUrl string ) (string, int) {
     return "", 404
 }
 
-func getShortLinkFromRequest( r *http.Request ) string {
+func getHashFromRequest( r *http.Request ) (string, error) {
 
-    return r.URL.RawQuery[len(r.URL.RawQuery)-shortLinkLength:]
+	if (len(r.URL.RawQuery) > hashLength) {
+		return r.URL.RawQuery[len(r.URL.RawQuery)- hashLength:], nil
+
+	} else {
+		err := getHashFromRequestError{s: "Невозможно получить короткую ссылку из запроса \n"}
+		return "", &err
+	}
 }
 
 func redirect( w http.ResponseWriter, r *http.Request ) {
 
-	shortUrl, _ := url.QueryUnescape(getShortLinkFromRequest( r ))
-	url, statusCode := getFullUrl( shortUrl )
+	link, err := getHashFromRequest( r )
+	if err == nil {
+		shortUrl, _ := url.QueryUnescape(link)
+		url, statusCode := getFullUrl( shortUrl )
 
-    if statusCode == 303 {
-        http.Redirect(w, r, url, http.StatusSeeOther)
+		if statusCode == 303 {
+			http.Redirect(w, r, url, http.StatusSeeOther)
 
-    } else {
-        http.Redirect(w, r, shortUrl, http.StatusNotFound)
-    }
+		} else {
+			http.Redirect(w, r, shortUrl, http.StatusNotFound)
+		}
+	} else {
+		fmt.Println(err)
+	}
 }
-
 
 func getLinkCnt( shortUrl string ) int {
 
-    val, ok := tableOfLinks[shortUrl]
-    if ok == true {
+	val, ok := tableOfLinks[shortUrl]
+	if ok == true {
 		return val.Cnt
-    }
-    return -1
+	}
+	return -1
 }
 
 func getLinkStatistiсs( w http.ResponseWriter, r *http.Request ) {
 
-    shortUrl, _ := url.QueryUnescape(getShortLinkFromRequest( r ))
-    cnt := getLinkCnt( shortUrl)
+	hash, err := getHashFromRequest( r )
 
-    if cnt >= 0 {
-        str := fmt.Sprintf("Адрес %s посещали %d раз \n", shortUrl, cnt )
-        w.Write([]byte(str))
+	if err == nil {
+		encHash, _ := url.QueryUnescape( hash )
+		cnt := getLinkCnt( encHash )
 
-    } else {
-        str := fmt.Sprintf("Адрес %s не существует в системе\n", shortUrl )
-        w.Write([]byte(str))
-    }
+		if cnt >= 0 {
+			str := fmt.Sprintf("Адрес %s посещали %d раз \n", baseUrl + encHash, cnt )
+			w.Write([]byte(str))
+
+		} else {
+			str := fmt.Sprintf("Адрес %s не существует в системе\n",
+				baseUrl + encHash )
+			w.Write([]byte(str))
+		}
+	} else {
+		fmt.Println(err)
+	}
 }
 
 func registerNewLink( w http.ResponseWriter, r *http.Request ) {
 
 	query, _ := url.QueryUnescape(r.URL.RawQuery)
 
-    if len(query) > 8 {
-        url := query[4:]
-        newStruct := fullUrl{ Url: url }
-        hash := generateShortURL(url)
-        tableOfLinks[hash] = newStruct
+	if len(query) > 8 {
+		url := query[4:]
+		newStruct := fullUrl{ Url: url }
+		hash := generateShortURL(url)
+		tableOfLinks[hash] = newStruct
 
-        str := fmt.Sprintf("Короткая ссылка для %s - %s \n", url, hash)
-        w.Write([]byte(str))
+		str := fmt.Sprintf("Короткая ссылка для %s - %s \n", url, baseUrl + hash)
+		w.Write([]byte(str))
 
-    } else {
-        w.Write([]byte("Введенный url неполный! \n"))
-    }
+	} else {
+		w.Write([]byte("Введенный url неполный! \n"))
+	}
 }
 
 func main () {
 
-    s := &http.Server{
+	s := &http.Server{
 		Addr:           ":8080",
-    }
+	}
 
-    // обработчики запросов:
-    // - перейти по короткой ссылке
-    http.HandleFunc("/get_full_url/", redirect)
-    // - получить новую короткую ссылку
-    http.HandleFunc("/reg_new_link/", registerNewLink)
-    // - получить статистику переходов по короткой ссылке
-    http.HandleFunc("/get_link_statistiсs/", getLinkStatistiсs)
+	// обработчики запросов:
+	// - перейти по короткой ссылке
+	http.HandleFunc("/", redirect)
+	// - получить новую короткую ссылку
+	http.HandleFunc("/reg_new_link/", registerNewLink)
+	// - получить статистику переходов по короткой ссылке
+	http.HandleFunc("/get_link_statistiсs/", getLinkStatistiсs)
 
-    //запускаем сервер
-    s.ListenAndServe()
+	//запускаем сервер
+	s.ListenAndServe()
 }
